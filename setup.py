@@ -9,7 +9,7 @@ setup(
     author='Vsevolod Slivсa',
     description='Uzum Payments API Client',
     long_description=long_description,
-    long_description_content_type='text/x-rst',
+    long_description_content_type='text/markdown',
     license='MIT',
     url='https://github.com/homeroff/uzum-payments/',
     classifiers=[
@@ -31,6 +31,7 @@ setup(
     project_urls={
         'Source Code': 'https://github.com/homeroff/uzum-payments/',
         'Issue Tracker': 'https://github.com/homeroff/uzum-payments/issues',
+        'Documentation': 'https://www.inplat-tech.ru/docs/checkout/'
     },
     install_requires=['requests'], 
 )
