@@ -8,7 +8,7 @@ from uzum_payments.connection import Connection
 from uzum_payments.const import BASE_RECEIPT_URL
 
 
-class ApiClient(Connection):
+class ReceiptApiClient(Connection):
     """Performs requests to the Uzum Receipt producer API"""
 
     def __init__(self,
