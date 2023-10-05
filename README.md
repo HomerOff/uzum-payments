@@ -1,6 +1,6 @@
 # Uzum Payments
 
-Easy to use API wrapper for Uzum Checkout API v1.10.1 written in Python. Supports sync and async requests.
+Easy to use API wrapper for Uzum Checkout API v1.10.1 & Uzum Receipt producer API v0.0.2 written in Python. Supports sync and async requests.
 
 ## Install
 

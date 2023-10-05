@@ -1,20 +1,15 @@
-import asyncio
-import json
 import logging
 from typing import Optional, Any, Union
 
 import aiohttp
 import requests
 
-from . import exceptions
+from .connection import Connection
+from .const import BASE_CHECKOUT_URL
 
 
-class ApiClient:
-    """Performs requests to the Uzum Checkout API."""
-
-    URL = 'https://www.inplat-tech.ru/api/v1/'
-    REQUEST_LOG = '{method} {url} has received {text}, has returned {status}'
-
+class ApiClient(Connection):
+    """Performs requests to the Uzum Checkout API"""
     def __init__(self,
                  signature: str,
                  terminal_id: str,
@@ -22,7 +17,7 @@ class ApiClient:
                  content_language: str = 'ru-RU',
                  fingerprint: Optional[str] = None,
                  api_key: Optional[str] = None,
-                 base_url: Optional[str] = URL,
+                 base_url: Optional[str] = BASE_CHECKOUT_URL,
                  session: Union[aiohttp.ClientSession, requests.Session] = None,
                  is_async: bool = False, ) -> None:
         """
@@ -67,9 +62,14 @@ class ApiClient:
             self.headers.update({'X-API-Key': self.api_key})
 
         self.base_url = base_url
+        if not self.base_url[-1] == '/':
+            self.base_url += '/'
+
         self.session = session or (aiohttp.ClientSession() if is_async else requests.Session())
         self.is_async = is_async
         self.logger = logging.getLogger(__name__)
+
+        Connection.__init__(self, self.session, self.headers, self.logger, self.is_async)
 
     @classmethod
     def Async(cls,
@@ -79,7 +79,7 @@ class ApiClient:
               content_language: str = 'ru-RU',
               fingerprint: Optional[str] = None,
               api_key: Optional[str] = None,
-              base_url: Optional[str] = URL,
+              base_url: Optional[str] = BASE_CHECKOUT_URL,
               session: Union[aiohttp.ClientSession, requests.Session] = None,):
         """
         Returns the client in async mode.
@@ -105,21 +105,6 @@ class ApiClient:
                    base_url=base_url,
                    session=session,
                    is_async=True)
-
-    def __repr__(self):
-        return '<Uzum Payments Client async={}>'.format(self.is_async)
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_value, traceback):
-        return self.close()
-
-    def close(self):
-        return self.session.close()
 
     def register(self,
                  amount: Optional[float],
@@ -174,7 +159,7 @@ class ApiClient:
         else:
             data.update({"paymentParams": payment_params})
 
-        return self._post_model(url, data={**data, **kwargs})
+        return self._request_model(url, data={**data, **kwargs})
 
     def merchant_pay(self, process_data: dict[dict[str, Any]], order_id: str) -> dict:
         """
@@ -190,7 +175,7 @@ class ApiClient:
             'orderId': order_id,
         }
 
-        return self._post_model(url, data=data)
+        return self._request_model(url, data=data)
 
     def get_order_status(self, order_id: str) -> dict:
         """
@@ -204,7 +189,7 @@ class ApiClient:
             'orderId': order_id,
         }
 
-        return self._post_model(url, data=data)
+        return self._request_model(url, data=data)
 
     def get_operation_state(self, operation_id: str) -> dict:
         """
@@ -234,7 +219,7 @@ class ApiClient:
             'amount': amount,
         }
 
-        return self._post_model(url, data=data)
+        return self._request_model(url, data=data)
 
     def refund(self, order_id: str, amount: int) -> dict:
         """
@@ -250,7 +235,7 @@ class ApiClient:
             'amount': amount,
         }
 
-        return self._post_model(url, data=data)
+        return self._request_model(url, data=data)
 
     def reverse(self, order_id: str, amount: int) -> dict:
         """
@@ -267,7 +252,7 @@ class ApiClient:
             'amount': amount,
         }
 
-        return self._post_model(url, data=data)
+        return self._request_model(url, data=data)
 
     def get_bindings(self, client_id: str) -> dict:
         """
@@ -281,52 +266,7 @@ class ApiClient:
             'clientId': client_id,
         }
 
-        return self._post_model(url, data=data)
+        return self._request_model(url, data=data)
 
-    def _raise_for_status(self, resp: Union[aiohttp.ClientResponse, requests.Response], text: str, method: str = None) -> dict:
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError:
-            raise json.JSONDecodeError
-
-        error_code = data.get('errorCode')
-        self.logger.debug(self.REQUEST_LOG.format(method=method or resp.request_info.method, url=resp.url, text=text, status=error_code))
-
-        if not error_code:  # Request was successful
-            return data
-
-        elif error_code >= 5000:
-            raise exceptions.InternalError(data, error_code)
-        elif error_code >= 3000:
-            raise exceptions.PaymentErrors(data, error_code)
-        elif error_code >= 2000:
-            raise exceptions.ValidationError(data, error_code)
-        elif error_code >= 1000:
-            raise exceptions.AuthenticationError(data, error_code)
-
-        raise exceptions.UnexpectedError(data, error_code)
-
-
-    def _post(self, url: str, data: dict = None) -> dict:
-        try:
-           with self.session.post(url, headers=self.headers, json=data) as resp:
-               return self._raise_for_status(resp, resp.text, 'POST')
-        except requests.Timeout:
-            raise exceptions.NotResponding
-        except requests.ConnectionError:
-            raise exceptions.NetworkError
-
-    async def _async_post(self, url: str, data: dict = None) -> dict:
-        try:
-            async with self.session.post(url, headers=self.headers, json=data) as resp:
-                return self._raise_for_status(resp, await resp.text(), 'POST')
-        except asyncio.TimeoutError:
-            raise exceptions.NotResponding
-        except aiohttp.ServerDisconnectedError:
-            raise exceptions.NetworkError
-
-    def _post_model(self, url: str, data: dict = None):
-        if self.is_async:
-            return self._async_post(url, data)
-
-        return self._post(url, data)
+    def __repr__(self):
+        return '<Uzum Payments Client async={}>'.format(self.is_async)

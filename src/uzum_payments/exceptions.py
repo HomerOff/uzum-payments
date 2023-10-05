@@ -1,6 +1,3 @@
-import json
-
-
 class ApiError(Exception):
     """Represents an exception returned by the remote API."""
     pass
@@ -41,6 +38,19 @@ class ValidationError(UzumCheckoutException):
     pass
 
 class AuthenticationError(UzumCheckoutException):
+    pass
+
+
+class BadRequest(UzumCheckoutException):
+    pass
+
+class SignatureError(UzumCheckoutException):
+    pass
+
+class FingerprintError(UzumCheckoutException):
+    pass
+
+class InternalServerError(UzumCheckoutException):
     pass
 
 class UnexpectedError(UzumCheckoutException):
