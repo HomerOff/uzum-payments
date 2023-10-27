@@ -1,8 +1,15 @@
+import base64
+import json
 import logging
 from typing import Optional, Any, Union
 
 import aiohttp
 import requests
+
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+import hashlib
 
 from .connection import Connection
 from .const import BASE_CHECKOUT_URL
@@ -11,8 +18,9 @@ from .const import BASE_CHECKOUT_URL
 class ApiClient(Connection):
     """Performs requests to the Uzum Checkout API"""
     def __init__(self,
-                 signature: str,
                  terminal_id: str,
+                 signature_private_key: str = None,
+                 signature_private_key_password: bytes = None,
                  merchant_access_token: Optional[str] = None,
                  content_language: str = 'ru-RU',
                  fingerprint: Optional[str] = None,
@@ -21,26 +29,26 @@ class ApiClient(Connection):
                  session: Union[aiohttp.ClientSession, requests.Session] = None,
                  is_async: bool = False, ) -> None:
         """
-        :param signature: В каждый запрос от мерчанта в Uzum checkout необходимо добавить заголовок X-Signature.
+        :param terminal_id: Идентификатор терминала
+        :param signature_private_key: Путь к private key мерчанта. В каждый запрос от мерчанта в Uzum checkout необходимо добавить заголовок X-Signature.
                   Значением заголовка является подпись тела запроса. Для создания подписи используется ECDSA c хеш алгоритмом SHA256.
                   Мерчант на своей стороне генерирует private key и передает в Uzum checkout public key для проверки подписи.
                   При обработке запроса от мерчанта, Uzum checkout будет использовать полученный public key для проверки подписи запроса.
                   Если подпись окажется не валидной, Uzum checkout вернет ответ с errorCode=1000.
-        :param terminal_id: Идентификатор терминала
-        :param merchant_access_token: JWT-токен, полученный при аутентификации пользователя с помощью UzumID
+        :param signature_private_key_password: Пароль от private key мерчанта.
+          Если подпись окажется не валидной, Uzum checkout вернет ответ с errorCode=1000.
+        :param merchant_access_token: JWT-токен, полученный при аутентификации пользователя с помощью UzumID.
         :param content_language: Уникальный ключ, который используется для аутентификации запросов.
         :param fingerprint: Заголовок выставляется по результату успешного прохождения mTLS.
         :param api_key: Уникальный ключ, который используется для аутентификации запросов.
-        :param base_url: URL-адрес API
-        :param session: Экземпляр сессии
-        :param is_async: Асинхронное выполнение запросов
+        :param base_url: URL-адрес API.
+        :param session: Экземпляр сессии.
+        :param is_async: Асинхронное выполнение запросов.
         """
 
-        self.signature = signature
         self.terminal_id = terminal_id
         self.content_language = content_language
         self.headers = {
-            'X-Signature': self.signature,
             'Content-Language': self.content_language,
             'X-Terminal-Id': self.terminal_id,
             'Accept': 'application/json',
@@ -48,6 +56,11 @@ class ApiClient(Connection):
             'Cache-Control': 'no-cache',
             'Content-Type': 'application/json',
         }
+
+        if signature_private_key:
+            self.signature_private_key = signature_private_key
+            self.signature_private_key_password = signature_private_key_password
+            self.headers.update({'X-Signature': ''})
 
         if merchant_access_token:
             self.merchant_access_token = merchant_access_token
@@ -73,8 +86,9 @@ class ApiClient(Connection):
 
     @classmethod
     def Async(cls,
-              signature: str,
               terminal_id: str,
+              signature_private_key: str = None,
+              signature_private_key_password: bytes = None,
               merchant_access_token: Optional[str] = None,
               content_language: str = 'ru-RU',
               fingerprint: Optional[str] = None,
@@ -82,22 +96,24 @@ class ApiClient(Connection):
               base_url: Optional[str] = BASE_CHECKOUT_URL,
               session: Union[aiohttp.ClientSession, requests.Session] = None,):
         """
-        Returns the client in async mode.
-        :param signature: В каждый запрос от мерчанта в Uzum checkout необходимо добавить заголовок X-Signature.
+        :param terminal_id: Идентификатор терминала
+        :param signature_private_key: Путь к private key мерчанта. В каждый запрос от мерчанта в Uzum checkout необходимо добавить заголовок X-Signature.
                   Значением заголовка является подпись тела запроса. Для создания подписи используется ECDSA c хеш алгоритмом SHA256.
                   Мерчант на своей стороне генерирует private key и передает в Uzum checkout public key для проверки подписи.
                   При обработке запроса от мерчанта, Uzum checkout будет использовать полученный public key для проверки подписи запроса.
                   Если подпись окажется не валидной, Uzum checkout вернет ответ с errorCode=1000.
-        :param terminal_id: Идентификатор терминала
-        :param merchant_access_token: JWT-токен, полученный при аутентификации пользователя с помощью UzumID
+        :param signature_private_key_password: Пароль от private key мерчанта.
+          Если подпись окажется не валидной, Uzum checkout вернет ответ с errorCode=1000.
+        :param merchant_access_token: JWT-токен, полученный при аутентификации пользователя с помощью UzumID.
         :param content_language: Уникальный ключ, который используется для аутентификации запросов.
         :param fingerprint: Заголовок выставляется по результату успешного прохождения mTLS.
         :param api_key: Уникальный ключ, который используется для аутентификации запросов.
-        :param base_url: URL-адрес API
-        :param session: Экземпляр сессии
+        :param base_url: URL-адрес API.
+        :param session: Экземпляр сессии.
         """
-        return cls(signature=signature,
-                   terminal_id=terminal_id,
+        return cls(terminal_id=terminal_id,
+                   signature_private_key=signature_private_key,
+                   signature_private_key_password=signature_private_key_password,
                    merchant_access_token=merchant_access_token,
                    content_language=content_language,
                    fingerprint=fingerprint,
@@ -159,6 +175,8 @@ class ApiClient(Connection):
         else:
             data.update({"paymentParams": payment_params})
 
+        self._update_headers(data)
+
         return self._request_model(url, data={**data, **kwargs})
 
     def merchant_pay(self, process_data: dict[dict[str, Any]], order_id: str) -> dict:
@@ -175,6 +193,8 @@ class ApiClient(Connection):
             'orderId': order_id,
         }
 
+        self._update_headers(data)
+
         return self._request_model(url, data=data)
 
     def get_order_status(self, order_id: str) -> dict:
@@ -188,6 +208,8 @@ class ApiClient(Connection):
         data = {
             'orderId': order_id,
         }
+
+        self._update_headers(data)
 
         return self._request_model(url, data=data)
 
@@ -203,7 +225,9 @@ class ApiClient(Connection):
             'operationId': operation_id,
         }
 
-        return self._post_model(url, data=data)
+        self._update_headers(data)
+
+        return self._request_model(url, data=data)
 
     def complete(self, order_id: str, amount: int) -> dict:
         """
@@ -218,6 +242,8 @@ class ApiClient(Connection):
             'orderId': order_id,
             'amount': amount,
         }
+
+        self._update_headers(data)
 
         return self._request_model(url, data=data)
 
@@ -234,6 +260,8 @@ class ApiClient(Connection):
             'orderId': order_id,
             'amount': amount,
         }
+
+        self._update_headers(data)
 
         return self._request_model(url, data=data)
 
@@ -252,6 +280,8 @@ class ApiClient(Connection):
             'amount': amount,
         }
 
+        self._update_headers(data)
+
         return self._request_model(url, data=data)
 
     def get_bindings(self, client_id: str) -> dict:
@@ -266,7 +296,31 @@ class ApiClient(Connection):
             'clientId': client_id,
         }
 
+        self._update_headers(data)
+
         return self._request_model(url, data=data)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<Uzum Payments Client async={}>'.format(self.is_async)
+
+    def _update_headers(self, data: dict) -> None:
+        if self.headers.get('X-Signature') is not None:
+            signature = _generate_signature(self.signature_private_key, data, self.signature_private_key_password)
+            self.headers.update({'X-Signature': signature})
+
+
+def _generate_signature(signature_private_key: str, data: dict, signature_private_key_password: bytes = None):
+    request_data = json.dumps(data)
+    hash_object = hashlib.sha256(request_data.encode())
+    hash_hex = hash_object.hexdigest()
+
+    with open(signature_private_key, 'rb') as key_file:
+        private_key = serialization.load_pem_private_key(key_file.read(), password=signature_private_key_password)
+
+    signature = private_key.sign(
+        hash_hex.encode(),
+        ec.ECDSA(hashes.SHA256())
+    )
+    signature_base64 = base64.b64encode(signature).decode()
+
+    return signature_base64

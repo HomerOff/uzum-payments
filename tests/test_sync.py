@@ -14,7 +14,6 @@ BASE_URL = os.getenv('base_url', '')
 class TestAsyncClient(unittest.TestCase):
     def setUp(self):
         self.client = uzum_payments.ApiClient(terminal_id=TERMINAL_ID,
-                                              signature=SIGNATURE,
                                               api_key=API_KEY,
                                               base_url=BASE_URL)
 

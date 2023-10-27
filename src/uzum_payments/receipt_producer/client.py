@@ -4,33 +4,41 @@ from typing import Optional, Union
 import aiohttp
 import requests
 
-from uzum_payments.connection import Connection
-from uzum_payments.const import BASE_RECEIPT_URL
+from src.uzum_payments.connection import Connection
+from src.uzum_payments.const import BASE_RECEIPT_URL
 
 
 class ReceiptApiClient(Connection):
     """Performs requests to the Uzum Receipt producer API"""
 
     def __init__(self,
-                 ssl_client_fingerprint: str,
+                 ssl_client_fingerprint: str = None,
+                 api_key: str = None,
                  base_url: Optional[str] = BASE_RECEIPT_URL,
                  session: Union[aiohttp.ClientSession, requests.Session] = None,
                  is_async: bool = False, ) -> None:
         """
         :param ssl_client_fingerprint: Заголовок выставляется по результату успешного прохождения mTLS.
-        :param base_url: URL-адрес API
-        :param session: Экземпляр сессии
-        :param is_async: Асинхронное выполнение запросов
+        :param api_key: Уникальный ключ, который используется для аутентификации запросов.
+        :param base_url: URL-адрес API.
+        :param session: Экземпляр сессии.
+        :param is_async: Асинхронное выполнение запросов.
         """
 
-        self.ssl_client_fingerprint = ssl_client_fingerprint
         self.headers = {
-            'ssl-client-fingerprint': self.ssl_client_fingerprint,
             'Accept': 'application/json',
             'Accept-Encoding': 'gzip,deflate,sdch',
             'Cache-Control': 'no-cache',
             'Content-Type': 'application/json',
         }
+
+        if ssl_client_fingerprint:
+            self.ssl_client_fingerprint = ssl_client_fingerprint
+            self.headers.update({'ssl_client_fingerprint': self.ssl_client_fingerprint})
+
+        if api_key:
+            self.api_key = api_key
+            self.headers.update({'X-API-Key': self.api_key})
 
         self.base_url = base_url
         if not self.base_url[-1] == '/':
@@ -44,16 +52,19 @@ class ReceiptApiClient(Connection):
 
     @classmethod
     def Async(cls,
-              ssl_client_fingerprint: str,
+              ssl_client_fingerprint: str = None,
+              api_key: str = None,
               base_url: Optional[str] = BASE_RECEIPT_URL,
               session: Union[aiohttp.ClientSession, requests.Session] = None, ):
         """
         Returns the client in async mode.
-               :param ssl_client_fingerprint: Заголовок выставляется по результату успешного прохождения mTLS.
-        :param base_url: URL-адрес API
+        :param ssl_client_fingerprint: Заголовок выставляется по результату успешного прохождения mTLS.
+        :param api_key: Уникальный ключ, который используется для аутентификации запросов.
+        :param base_url: URL-адрес API.
         :param session: Экземпляр сессии
         """
         return cls(ssl_client_fingerprint=ssl_client_fingerprint,
+                   api_key=api_key,
                    base_url=base_url,
                    session=session,
                    is_async=True)

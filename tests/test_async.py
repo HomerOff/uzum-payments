@@ -7,7 +7,6 @@ import asynctest
 import uzum_payments
 
 TERMINAL_ID = os.getenv('terminal_id', '')
-SIGNATURE = os.getenv('signature', '')
 API_KEY = os.getenv('api_key', '')
 BASE_URL = os.getenv('base_url', '')
 
@@ -15,7 +14,6 @@ BASE_URL = os.getenv('base_url', '')
 class TestAsyncClient(asynctest.TestCase):
     async def setUp(self):
         self.client = uzum_payments.ApiClient.Async(terminal_id=TERMINAL_ID,
-                                                    signature=SIGNATURE,
                                                     api_key=API_KEY,
                                                     base_url=BASE_URL)
 
