@@ -5,7 +5,7 @@ with open('README.md', encoding='utf8') as f:
 
 setup(
     name='uzum-payments',
-    version='0.0.5',
+    version='0.0.6',
     author='Vsevolod Slivсa',
     description='Uzum Payments API Client',
     long_description=long_description,

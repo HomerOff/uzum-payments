@@ -4,8 +4,8 @@ from typing import Optional, Union
 import aiohttp
 import requests
 
-from src.uzum_payments.connection import Connection
-from src.uzum_payments.const import BASE_RECEIPT_URL
+from uzum_payments.connection import Connection
+from uzum_payments.const import BASE_RECEIPT_URL
 
 
 class ReceiptApiClient(Connection):
